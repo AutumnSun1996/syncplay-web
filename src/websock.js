@@ -188,9 +188,7 @@ export default function Websock() {
         },
 
         send_string: function (str) {
-            this.send(str.split('').map(function (chr) {
-                return chr.charCodeAt(0);
-            }));
+            this.send(new TextEncoder("utf-8").encode(str));
         },
 
         // Event Handlers
