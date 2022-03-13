@@ -26,6 +26,7 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
 
   var stateChanged = false;
   var decoder = new TextDecoder('utf8');
+  var shouldSync = true;  // 标记当前客户端是否应立刻进行同步
 
   function init(initobj, onconnected, vnode) {
     url = initobj.url;
@@ -149,24 +150,32 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
       if (payload.hasOwnProperty("State")) {
         clientRtt = payload.State.ping.yourLatency;
         latencyCalculation = payload.State.ping.latencyCalculation;
-
-        if (payload.State.hasOwnProperty("ignoringOnTheFly")) {
-          var ignore = payload.State.ignoringOnTheFly;
-          if (ignore.hasOwnProperty("server")) {
-            serverIgnoringOnTheFly = ignore["server"];
-            clientIgnoringOnTheFly = 0;
-            stateChanged = false;
-          } else if (ignore.hasOwnProperty("client")) {
-            if ((ignore["client"]) == clientIgnoringOnTheFly) {
+        if (shouldSync) {
+          var detail = payload.State.playstate;
+          detail.doSeek = true;
+          var sevent = new CustomEvent("userevent", {
+            detail: detail,
+            bubbles: true,
+            cancelable: true
+          });
+          videoNode.dispatchEvent(sevent);
+          shouldSync = false;
+        } else {
+          if (payload.State.hasOwnProperty("ignoringOnTheFly")) {
+            var ignore = payload.State.ignoringOnTheFly;
+            if (ignore.hasOwnProperty("server")) {
+              serverIgnoringOnTheFly = ignore["server"];
               clientIgnoringOnTheFly = 0;
               stateChanged = false;
+            } else if (ignore.hasOwnProperty("client")) {
+              if ((ignore["client"]) == clientIgnoringOnTheFly) {
+                clientIgnoringOnTheFly = 0;
+                stateChanged = false;
+              }
             }
           }
-        }
-        if (payload.State.playstate.hasOwnProperty("setBy")
-        ) {
-          if (payload.State.playstate.setBy != null) {
-            if (payload.State.playstate.setBy != username) {
+          if (payload.State.playstate.hasOwnProperty("setBy")) {
+            if (payload.State.playstate.setBy != null && payload.State.playstate.setBy != username) {
               var sevent = new CustomEvent("userevent", {
                 detail: payload.State.playstate,
                 bubbles: true,
