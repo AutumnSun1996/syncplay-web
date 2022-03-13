@@ -180,7 +180,6 @@
 
     $(vid_player).on("listusers", function (e) {
       console.debug('handle', 'listusers', e.detail);
-      $('#manage').text(JSON.stringify(e.detail));
       var seekFromEvent = true;
       for (var i = 0; i < Object.keys(e.detail).length; i++) {
         var user = Object.keys(e.detail)[i];
