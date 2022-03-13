@@ -17,7 +17,7 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
   var size: number;
   var clientRtt: number = 0;
   var videoNode;
-  
+
   var clientIgnoringOnTheFly = 0;
   var serverIgnoringOnTheFly = 0;
 
@@ -40,11 +40,9 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
   }
   init(initobj, onconnected, vNode);
 
-  function establishWS(conncallback) {
+  function connect() {
     socket = new ReconnectingWebSocket(url);
-    socket.onopen = p => {
-      sendHello();
-    };
+    socket.onopen = sendHello;
     socket.onmessage = messageHandler;
     socket.onerror = onerror;
   }
@@ -274,9 +272,7 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
   }
 
   return {
-    connect: function () {
-      establishWS(onconnected);
-    },
+    connect: connect,
     set_file: function (name, length, size_bytes) {
       filename = name;
       duration = length;
