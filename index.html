@@ -2,21 +2,26 @@
 <meta charset="utf-8">
 
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"
+    integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastr@2.1.4/build/toastr.min.js"
+    integrity="sha256-Hgwq1OBpJ276HUP9H3VJkSv9ZCGRGQN+JldPJ8pNcUM=" crossorigin="anonymous"></script>
   <script src="build/syncplay.min.js"></script>
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet" />
-</head>
-
-<body>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastr@2.1.4/build/toastr.min.css"
+    integrity="sha256-R91pD48xW+oHbpJYGn5xR0Q7tMhH4xOrWn1QqMRINtA=" crossorigin="anonymous">
   <style>
     body {
       background: wheat;
     }
 
-    #node {
-      width: 100%;
+    html,
+    body {
       margin: 0;
+      padding: 0;
+    }
+
+    #node {
+      margin: 20px;
       padding: 0;
     }
 
@@ -41,19 +46,33 @@
       display: block;
       cursor: pointer;
     }
+
+    input.input-url {
+      width: 60%;
+    }
   </style>
-  <input id="fpicker" type="file" accept="video/*,audio/*" /><br>
-  <label>(或)输入视频链接:
-    <input id="video-src" type="text" style="width: 60%;" />
-  </label> <br>
-  <label>输入用户名:
-    <input id="username" type="text" value="User1" />
-  </label>
-  <label>输入房间名:
-    <input id="room" type="text" value="Violet" />
-  </label>
-  <button onclick="start()">确认</button> <br>
-  <video id="node" controls="true" style="display: none;"></video>
+</head>
+
+<body>
+  <div id="input-form">
+    <label>
+      同步服务:
+      <input class="input-url" type="text" name="server-url" id="server-url" value="ws://127.0.0.1:9000/websockify">
+    </label> <br>
+    <label>视频地址:
+      <input class="input-url" id="video-src" type="text" value="http://10.240.129.116/full-h264_amf-1920x806.mp4" />
+    </label> <br>
+    或本地文件: <input id="fpicker" type="file" accept="video/*,audio/*" /><br>
+    <label>用户名:
+      <input id="username" type="text" value="User1" />
+    </label>
+    <label>房间名:
+      <input id="room" type="text" value="Test" />
+    </label>
+    <button onclick="start()">确认</button> <br>
+  </div>
+  <div id="manage"></div>
+  <video id="node" controls="true"></video>
   <script>
     toastr.options = {
       "closeButton": true,
@@ -78,12 +97,24 @@
 
     var username = $('#username').val();
 
+    function formatDuration(value) {
+      var sec_num = parseInt(value, 10); // don't forget the second param
+      var hours = Math.floor(sec_num / 3600);
+      var minutes = Math.floor((sec_num - (hours * 3600)) / 60);
+      var seconds = sec_num - (hours * 3600) - (minutes * 60);
+
+      if (hours < 10) { hours = "0" + hours; }
+      if (minutes < 10) { minutes = "0" + minutes; }
+      if (seconds < 10) { seconds = "0" + seconds; }
+      return hours + ':' + minutes + ':' + seconds;
+    }
+
     function start() {
       var target = $("#fpicker")[0].files[0];
       var src = $('#video-src').val();
       console.log('target', target, 'src', src)
       if (!target && !src) {
-        toastr.error('No file or url provided!')
+        toastr.error('未提供视频文件或Url!')
         return;
       }
       if (target) {
@@ -99,40 +130,36 @@
     }
     vid_player.volume = 0.3;
     $(vid_player).on("loadeddata", function (e) {
-      console.log('loadeddata');
+      console.debug('handle', 'loadeddata', e.detail);
       $("#fpicker-div").hide();
       $("#node").show();
-
+      toastr.info(`视频文件读取成功(${formatDuration(vid_player.duration)}): ${filename}`);
       function onconnect(e) {
         if (e.connected) {
-          toastr.success("Connected!");
+          toastr.success("已连接到服务器!");
           syncplayjs.set_file(filename, vid_player.duration, filesize);
         }
+      }
+      function onerror(e) {
+        toastr.error("同步服务器连接失败!");
       }
       if (window.syncplayjs) {
         syncplayjs.disconnect();
         syncplayjs = null;
       }
 
-      window.syncplayjs = new SyncPlay({
+      window.syncplayjs = new SyncPlay(vid_player, {
         name: $('#username').val(),
-        room: $('#room').val() || "Violet",
-        url: "ws://127.0.0.1:9000/websockify"
-      }, onconnect, vid_player);
-      var getterFn = {
-        is_paused: function (vid_player) {
-          return vid_player.paused;
-        },
-        get_position: function (vid_player) {
-          return vid_player.currentTime;
-        }
-      };
-      syncplayjs.setStateGetters(getterFn, vid_player);
+        room: $('#room').val(),
+        url: $('#server-url').val()
+      }, onconnect, onerror);
       syncplayjs.connect();
     });
 
     $(vid_player).on("listusers", function (e) {
-      syncplayjs.seeked();
+      console.debug('handle', 'listusers', e.detail);
+      $('#manage').text(JSON.stringify(e.detail));
+      var seekFromEvent = true;
       for (var i = 0; i < Object.keys(e.detail).length; i++) {
         var user = Object.keys(e.detail)[i];
         if (user == username) {
@@ -145,7 +172,7 @@
     });
 
     $(vid_player).on("userlist", function (e) {
-      console.log('Handle', e, e.detail)
+      console.debug('handle', 'userlist', e.detail);
       var user = e.detail.user;
       var user_event = e.detail.evt;
       toastr.info("'" + user + "' " + user_event);
@@ -158,6 +185,7 @@
     window.seekFromEvent = false;
 
     $(vid_player).on("seeked", function (e) {
+      console.debug('handle', 'seeked', e.detail)
       if (!window.seekFromEvent) {
         syncplayjs.seeked();
       }
@@ -165,32 +193,37 @@
     });
 
     $(vid_player).on("fileupdate", function (e) {
-      var username = Object.keys(e.detail.user);
-      var file = e.detail.user[username].file;
-      var duration = file.duration; // seconds
-      var filename = file.name;
-      var filesize = file.size; // bytes
+      console.debug('handle', 'fileupdate', e.detail);
+      var names = Object.keys(e.detail.user);
+      for (var name of names) {
+        if (name === username) {
+          continue;
+        }
+        var info = e.detail.user[name].file;
+        toastr.info(`'${name}' 选择了文件(${formatDuration(info.duration)}): ${info.name}`);
+      }
     });
 
     $(vid_player).on("userevent", function (e) {
+      console.debug('handle', 'userevent', e.detail)
       var username = e.detail.setBy;
       var position = e.detail.position;
       var paused = e.detail.paused;
       var doSeek = e.detail.doSeek
 
       if (!paused && vid_player.paused) {
-        var message = "'" + username + "' resumes at " + position;
+        var message = "'" + username + "' resumes at " + formatDuration(position);
         vid_player.currentTime = e.detail.position;
         vid_player.play();
         toastr.info(message);
       }
       if (paused && !vid_player.paused) {
-        var message = "'" + username + "' paused at " + position;
+        var message = "'" + username + "' paused at " + formatDuration(position);
         vid_player.pause();
         toastr.info(message);
       }
       if (doSeek == true) {
-        var message = "'" + username + "' seeked to " + position;
+        var message = "'" + username + "' seeked to " + formatDuration(position);
         window.seekFromEvent = true;
         vid_player.currentTime = e.detail.position;
         toastr.warning(message);
@@ -198,11 +231,20 @@
     });
 
     $(vid_player).on("play", function (e) {
+      console.debug('handle', 'play', e.detail)
       syncplayjs.playPause();
     });
 
     $(vid_player).on("pause", function (e) {
+      console.debug('handle', 'pause', e.detail)
       syncplayjs.playPause();
+    });
+
+    $(vid_player).on("namechange", function (e) {
+      console.debug('handle', 'namechange', e.detail)
+      username = e.detail.username;
+      $('#username').val(username);
+      toastr.info(`用户名被修改为: '${username}'`);
     });
   </script>
 </body>
