@@ -292,7 +292,7 @@
         }
 
         // Whether or not to create a websocket upon instantiation
-        if (this.automaticOpen == true) {
+        if (this.automaticOpen === true) {
             this.open(false);
         }
 
