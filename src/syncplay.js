@@ -150,13 +150,15 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
         latencyCalculation = payload.State.ping.latencyCalculation;
         if (shouldSync) {
           var detail = payload.State.playstate;
-          detail.doSeek = true;
-          var sevent = new CustomEvent("userevent", {
-            detail: detail,
-            bubbles: true,
-            cancelable: true
-          });
-          videoNode.dispatchEvent(sevent);
+          if (detail.setBy) {
+            detail.doSeek = true;
+            var sevent = new CustomEvent("userevent", {
+              detail: detail,
+              bubbles: true,
+              cancelable: true
+            });
+            videoNode.dispatchEvent(sevent);
+          }
           shouldSync = false;
         } else {
           if (payload.State.hasOwnProperty("ignoringOnTheFly")) {
@@ -280,7 +282,6 @@ var SyncPlay = function (vNode, initobj, onconnected, onerror) {
       sendFileInfo();
     },
     disconnect: function () {
-      sendRoomEvent("left");
       socket.close();
     },
     playPause: playPause,
