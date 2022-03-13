@@ -1,9 +1,9 @@
 // @flow
 
 'use strict';
-import Websock from './websock';
+import ReconnectingWebSocket from './ReconnectingWebSocket';
 
-var SyncPlay = function (initobj, onconnected, videonode) {
+var SyncPlay = function (videonode, initobj, onconnected, onerror) {
   var version = "1.3.4";
   var username: string;
   var room: string;
@@ -29,6 +29,7 @@ var SyncPlay = function (initobj, onconnected, videonode) {
   var latencyCalculation;
 
   var stateChanged = false;
+  var decoder = new TextDecoder('utf8');
 
   function init(initobj, onconnected, vnode) {
     url = initobj.url;
@@ -43,12 +44,12 @@ var SyncPlay = function (initobj, onconnected, videonode) {
   init(initobj, onconnected, videonode);
 
   function establishWS(conncallback) {
-    socket = new Websock();
-    socket.open(url);
-    socket.on("open", p => {
+    socket = new ReconnectingWebSocket(url);
+    socket.onopen = p => {
       sendHello();
-    });
-    socket.on("message", socketHandler);
+    };
+    socket.onmessage = messageHandler;
+    socket.onerror = onerror;
   }
 
   function sendState(position, paused, doSeek, latencyCalculation, stateChange) {
@@ -89,8 +90,8 @@ var SyncPlay = function (initobj, onconnected, videonode) {
     send({ "State": state });
   }
 
-  function socketHandler() {
-    var large_payload: string = socket.rQshiftStr();
+  function messageHandler(message) {
+    var large_payload = decoder.decode(message.data);
     var split_payload = large_payload.split("\r\n");
     for (var index = 0; index < split_payload.length; index += 1) {
       if (split_payload[index] == "") {
@@ -284,6 +285,7 @@ var SyncPlay = function (initobj, onconnected, videonode) {
     setStateGetters: setGetters,
     disconnect: function () {
       sendRoomEvent("left");
+      socket.close();
     },
     playPause: playPause,
     seeked: seeked
