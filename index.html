@@ -25,7 +25,7 @@
       padding: 0;
     }
 
-    #fpicker-div {
+    #input-file-div {
       background: grey;
       width: 98%;
       height: 96%;
@@ -35,16 +35,6 @@
       cursor: pointer;
       border: 15px dashed wheat;
       margin: -10px;
-    }
-
-    #fpicker-div>label {
-      position: absolute;
-      text-align: center;
-      font-size: 4em;
-      width: 100%;
-      top: 40%;
-      display: block;
-      cursor: pointer;
     }
 
     input.input-url {
@@ -57,17 +47,17 @@
   <div id="input-form">
     <label>
       同步服务:
-      <input class="input-url" type="text" name="server-url" id="server-url" value="ws://127.0.0.1:9000/websockify">
+      <input class="input-url" type="text" name="server-url" id="server-url">
     </label> <br>
     <label>视频地址:
-      <input class="input-url" id="video-src" type="text" value="http://10.240.129.116/full-h264_amf-1920x806.mp4" />
+      <input class="input-url" id="video-src" type="text" />
     </label> <br>
-    或本地文件: <input id="fpicker" type="file" accept="video/*,audio/*" /><br>
+    或本地文件: <input id="input-file" type="file" accept="video/*,audio/*" /><br>
     <label>用户名:
-      <input id="username" type="text" value="User1" />
+      <input id="username" type="text" name="username" />
     </label>
     <label>房间名:
-      <input id="room" type="text" value="Test" />
+      <input id="room" type="text" name="room" />
     </label>
     <button onclick="start()">确认</button> <br>
   </div>
@@ -90,12 +80,38 @@
       "showMethod": "fadeIn",
       "hideMethod": "fadeOut"
     }
-    function pick() {
-      $("#fpicker").click();
-    }
     var vid_player = $("#node")[0];
+    const CONF_KEY = 'SyncPlayerConfig';
 
     var username = $('#username').val();
+    function defaultConfig() {
+      return {
+        serverUrl: location.protocol.replace('http', 'ws') + '//' + location.host + '/ws/websockify',
+        username: 'TestUser', room: 'TestRoom', videoSrc: ''
+      }
+    }
+    var conf;
+    function loadConfig() {
+      var data = localStorage.getItem(CONF_KEY);
+      if (data) {
+        try {
+          conf = JSON.parse(data);
+        } catch (e) { }
+      }
+      if (!conf) {
+        conf = defaultConfig();
+      }
+      console.log('conf', conf);
+      $('#server-url').val(conf.serverUrl);
+      $('#video-src').val(conf.videoSrc);
+      $('#username').val(conf.username);
+      $('#room').val(conf.room);
+    }
+    function saveConfig() {
+      localStorage.setItem(CONF_KEY, JSON.stringify(conf));
+    }
+
+    loadConfig();
 
     function formatDuration(value) {
       var sec_num = parseInt(value, 10); // don't forget the second param
@@ -110,34 +126,40 @@
     }
 
     function start() {
-      var target = $("#fpicker")[0].files[0];
-      var src = $('#video-src').val();
-      console.log('target', target, 'src', src)
-      if (!target && !src) {
+      var target = $("#input-file")[0].files[0];
+      conf.videoSrc = $('#video-src').val();
+      conf.room = $('#room').val();
+      conf.serverUrl = $('#server-url').val();
+      conf.username = $('#username').val();
+      console.log('target', target, 'src', conf.videoSrc)
+      saveConfig();
+      if (!target && !conf.videoSrc) {
         toastr.error('未提供视频文件或Url!')
         return;
       }
       if (target) {
         $("#node").attr("src", window.URL.createObjectURL(target));
-        window.filename = target.name;
-        window.filesize = target.size;
+        conf.filename = target.name;
+        conf.videoSrc = '';
+        conf.filesize = target.size;
       } else {
-        $("#node").attr("src", src);
-        window.filename = src;
-        window.filesize = null;
+        $("#node").attr("src", conf.videoSrc);
+        conf.filename = conf.videoSrc;
+        conf.filesize = null;
       }
-      document.title = '同步播放 - ' + $('#username').val();
+      saveConfig();
+      document.title = '同步播放 - ' + conf.username;
     }
     vid_player.volume = 0.3;
     $(vid_player).on("loadeddata", function (e) {
       console.debug('handle', 'loadeddata', e.detail);
-      $("#fpicker-div").hide();
+      $("#input-file-div").hide();
       $("#node").show();
-      toastr.info(`视频文件读取成功(${formatDuration(vid_player.duration)}): ${filename}`);
+      toastr.info(`视频文件读取成功(${formatDuration(vid_player.duration)}): ${conf.filename}`);
       function onconnect(e) {
         if (e.connected) {
           toastr.success("已连接到服务器!");
-          syncplayjs.set_file(filename, vid_player.duration, filesize);
+          syncplayjs.set_file(conf.filename, vid_player.duration, conf.filesize);
         }
       }
       function onerror(e) {
@@ -149,9 +171,9 @@
       }
 
       window.syncplayjs = new SyncPlay(vid_player, {
-        name: $('#username').val(),
-        room: $('#room').val(),
-        url: $('#server-url').val()
+        name: conf.username,
+        room: conf.room,
+        url: conf.serverUrl,
       }, onconnect, onerror);
       syncplayjs.connect();
     });
