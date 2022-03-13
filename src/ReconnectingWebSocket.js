@@ -287,6 +287,10 @@
                 if (self.debug || ReconnectingWebSocket.debugAll) {
                     console.debug('ReconnectingWebSocket', 'onerror', self.url, event);
                 }
+                if (forcedClose) {
+                    // ignore error of closed WebSocket
+                    return;
+                }
                 eventTarget.dispatchEvent(generateEvent('error'));
             };
         }
@@ -321,11 +325,11 @@
          * If the connection is already CLOSED, this method does nothing.
          */
         this.close = function (code, reason) {
+            forcedClose = true;
             // Default CLOSE_NORMAL code
             if (typeof code == 'undefined') {
                 code = 1000;
             }
-            forcedClose = true;
             if (ws) {
                 ws.close(code, reason);
             }
