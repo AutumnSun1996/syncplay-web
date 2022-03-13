@@ -3,7 +3,7 @@
 'use strict';
 import ReconnectingWebSocket from './ReconnectingWebSocket';
 
-var SyncPlay = function (videonode, initobj, onconnected, onerror) {
+var SyncPlay = function (vNode, initobj, onconnected, onerror) {
   var version = "1.3.4";
   var username: string;
   var room: string;
@@ -16,15 +16,11 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
   var duration: number;
   var size: number;
   var clientRtt: number = 0;
-  var node;
-  var clientno;
-
+  var videoNode;
+  
   var clientIgnoringOnTheFly = 0;
   var serverIgnoringOnTheFly = 0;
 
-  var paused: Function;
-  var position: Function;
-  var videoobj;
   var seek = false;
   var latencyCalculation;
 
@@ -34,14 +30,14 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
   function init(initobj, onconnected, vnode) {
     url = initobj.url;
     room = initobj.room;
-    node = vnode;
+    videoNode = vnode;
     username = initobj.name;
     conn_callback = onconnected;
     if (initobj.hasOwnProperty("password")) {
       password = initobj.password;
     }
   }
-  init(initobj, onconnected, videonode);
+  init(initobj, onconnected, vNode);
 
   function establishWS(conncallback) {
     socket = new ReconnectingWebSocket(url);
@@ -52,17 +48,16 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
     socket.onerror = onerror;
   }
 
-  function sendState(position, paused, doSeek, latencyCalculation, stateChange) {
+  function sendState(doSeek, latencyCalculation, stateChange) {
     var state = {};
     if (typeof (stateChange) == "undefined") {
       return false;
     }
-    var positionAndPausedIsSet = ((position != null) && (paused != null));
     var clientIgnoreIsNotSet = (clientIgnoringOnTheFly == 0 || serverIgnoringOnTheFly != 0);
-    if (clientIgnoreIsNotSet && positionAndPausedIsSet) {
+    if (clientIgnoreIsNotSet) {
       state["playstate"] = {};
-      state["playstate"]["position"] = position(videoobj);
-      state["playstate"]["paused"] = paused(videoobj);
+      state["playstate"]["position"] = videoNode.currentTime;
+      state["playstate"]["paused"] = videoNode.paused;
       if (doSeek) {
         state["playstate"]["doSeek"] = doSeek;
         seek = false;
@@ -108,7 +103,7 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
         if (username !== payload.Hello.username) {
           console.log('namechange', payload.Hello.username, username);
           username = payload.Hello.username;
-          node.dispatchEvent(new CustomEvent("namechange", { detail: { username: username } }));
+          videoNode.dispatchEvent(new CustomEvent("namechange", { detail: { username: username } }));
         }
         sendRoomEvent("joined");
       }
@@ -127,7 +122,7 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
                 bubbles: true,
                 cancelable: true
               });
-              node.dispatchEvent(sevent);
+              videoNode.dispatchEvent(sevent);
             }
             if (payload.Set.user[i].hasOwnProperty("file")) {
               if (Object.keys(payload.Set.user)[0] != username) {
@@ -136,7 +131,7 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
                   bubbles: true,
                   cancelable: true
                 });
-                node.dispatchEvent(sevent);
+                videoNode.dispatchEvent(sevent);
               }
             }
           }
@@ -149,7 +144,7 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
           bubbles: true,
           cancelable: true
         });
-        node.dispatchEvent(sevent);
+        videoNode.dispatchEvent(sevent);
       }
       if (payload.hasOwnProperty("State")) {
         clientRtt = payload.State.ping.yourLatency;
@@ -179,12 +174,12 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
               });
               if (!stateChanged && !clientIgnoringOnTheFly) {
                 stateChanged = false;
-                node.dispatchEvent(sevent);
+                videoNode.dispatchEvent(sevent);
               }
             }
           }
+          sendState(seek, latencyCalculation, stateChanged);
         }
-        sendState(position, paused, seek, latencyCalculation, stateChanged);
       }
     }
   }
@@ -260,14 +255,6 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
     socket.send_string(message);
   }
 
-  function setGetters(fobj, second) {
-    videoobj = second;
-    paused = fobj.is_paused;
-    position = fobj.get_position;
-    paused = paused.bind(second);
-    position = position.bind(second);
-  }
-
   function playPause() {
     stateChanged = true;
   }
@@ -287,7 +274,6 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
       size = size_bytes;
       sendFileInfo();
     },
-    setStateGetters: setGetters,
     disconnect: function () {
       sendRoomEvent("left");
       socket.close();
