@@ -93,7 +93,7 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
   function messageHandler(message) {
     var large_payload = decoder.decode(message.data);
     var split_payload = large_payload.split("\r\n");
-    for (var index = 0; index < split_payload.length; index += 1) {
+    for (var index = 0; index < split_payload.length; ++index) {
       if (split_payload[index] == "") {
         break;
       }
@@ -101,11 +101,16 @@ var SyncPlay = function (videonode, initobj, onconnected, onerror) {
       console.log("Server << " + JSON.stringify(payload));
       if (payload.hasOwnProperty("Hello")) {
         motd = payload.Hello.motd;
-        sendRoomEvent("joined");
         conn_callback({
           connected: true,
           motd: motd
         });
+        if (username !== payload.Hello.username) {
+          console.log('namechange', payload.Hello.username, username);
+          username = payload.Hello.username;
+          node.dispatchEvent(new CustomEvent("namechange", { detail: { username: username } }));
+        }
+        sendRoomEvent("joined");
       }
       if (payload.hasOwnProperty("Error")) {
         throw payload.Error;
